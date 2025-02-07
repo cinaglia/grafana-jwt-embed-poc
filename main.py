@@ -148,26 +148,33 @@ async def update_datasource_permissions(client: httpx.AsyncClient, team_uid: str
 async def update_lbac_rules(client: httpx.AsyncClient, team_uid: str, team_name: str) -> None:
     """
     Update LBAC rules for the team to apply team_id label.
+    First checks if rule exists to avoid overwriting other rules.
     """
-    payload = {
+    # First, get existing LBAC rules
+    get_rules_req = await create_grafana_request(
+        "GET",
+        f"/api/datasources/uid/{GRAFANA_CONFIG['datasource_id']}/lbac/teams"
+    )
+    get_rules_resp = await client.send(get_rules_req)
+    get_rules_resp.raise_for_status()
+    
+    existing_rules = get_rules_resp.json().get("rules", [])
+    rule = {
+        "teamUid": team_uid,
         "rules": [
-            {
-                "teamUid": team_uid,
-                "rules": [
-                    f'''{{team_id="{team_name}"}}''',
-                ]
-            }
+            f'''{{team_id="{team_name}"}}'''
         ]
     }
-
-    # Update LBAC rules for the datasource
-    lbac_req = await create_grafana_request(
-        "PUT",
-        f"/api/datasources/uid/{GRAFANA_CONFIG['datasource_id']}/lbac/teams",
-        payload
-    )
-    lbac_resp = await client.send(lbac_req)
-    lbac_resp.raise_for_status()
+      
+    # Update LBAC rules for the datasource, if applicable.
+    if rule not in existing_rules:
+        lbac_req = await create_grafana_request(
+            "PUT",
+            f"/api/datasources/uid/{GRAFANA_CONFIG['datasource_id']}/lbac/teams",
+            {"rules": existing_rules + [rule]}
+        )
+        lbac_resp = await client.send(lbac_req)
+        lbac_resp.raise_for_status()
 
 async def upsert_dashboard_role(client: httpx.AsyncClient, dashboard_id: str) -> str:
     """
