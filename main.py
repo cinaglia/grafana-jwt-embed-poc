@@ -28,6 +28,7 @@ GRAFANA_CONFIG = {
     "base_url": os.getenv("GRAFANA_BASE_URL", ""),
     "token": os.getenv("GRAFANA_TOKEN", ""),
     "datasource_id": os.getenv("GRAFANA_DATASOURCE_ID", ""),
+    "dashboard_id": os.getenv("GRAFANA_DASHBOARD_ID", ""),
     "private_key": {
         "p": "9kskMIvWlXmCqjLl11RlFUe-aAthUfL-JFlyIXlWV5QAE5egPjTJCHPJeMS-AmuTFte3uQc0KUYKZIRZtwjeLTvwoWU68ng0ntyQs8I8YaAqO6o8yIQxC-sPiP5ZSJasX2kbci6LnU6eePGhrBNp8QxLKDFkc7gGEzHG4cPx67E",
         "kty": "RSA",
@@ -273,7 +274,10 @@ def generate_grafana_jwt(username: str, email: str, team_name: str, user_id: int
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_html(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "dashboard_id": GRAFANA_CONFIG["dashboard_id"]
+    })
 
 @app.post("/grafana/dashboard/{dashboard_id}")
 async def handle_grafana_dashboard(dashboard_id: str, team_data: GrafanaTeam):
