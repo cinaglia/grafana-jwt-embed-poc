@@ -158,7 +158,7 @@ async def update_lbac_rules(client: httpx.AsyncClient, team_uid: str, team_name:
     get_rules_resp = await client.send(get_rules_req)
     get_rules_resp.raise_for_status()
     
-    existing_rules = get_rules_resp.json().get("rules", [])
+    existing_rules = get_rules_resp.json().get("rules", []) or []
     rule = {
         "teamUid": team_uid,
         "rules": [
