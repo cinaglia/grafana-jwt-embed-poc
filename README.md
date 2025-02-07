@@ -33,7 +33,7 @@ teamHttpHeadersMimir = true
 
 [auth.jwt]
 auto_sign_up = true
-cache_ttl = 60s
+cache_ttl = 60m
 enabled = true
 header_name = X-JWT-Assertion
 jwk_set_url = https://<server_url>/.well-known/jwks.json
@@ -41,8 +41,7 @@ url_login = true
 username_attribute_path = user.username
 email_attribute_path = user.email
 groups_attribute_path = user.group
-# This is important, as users would otherwise have "Viewer" permission on the entire stack.
-role_attribute_path = "'None'"
+role_attribute_path = user.role
 
 [security]
 allow_embedding = true

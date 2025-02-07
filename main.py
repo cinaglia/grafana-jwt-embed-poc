@@ -159,8 +159,6 @@ async def update_lbac_rules(client: httpx.AsyncClient, team_uid: str, team_name:
         ]
     }
 
-    print(payload)
-
     # Update LBAC rules for the datasource
     lbac_req = await create_grafana_request(
         "PUT",
