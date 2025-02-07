@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Grafana Dashboard Configuration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="m-0 p-0 h-screen w-screen">
+    <div class="fixed top-4 left-4 z-50 flex items-center gap-3">
+        <input type="hidden" id="dashboardId" value="eec9ivbbohczkf">
+        <select id="customerSelect" class="px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <option value="Customer 123">John @ Customer 123</option>
+            <option value="Customer 456">Peter @ Customer 456</option>
+        </select>
+        <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+            Load
+        </button>
+    </div>
+    <iframe id="grafana-frame" class="absolute w-full h-full border-0" src="about:blank"></iframe>
+
+    <script>
+        async function loadDashboard() {
+            const dashboardId = document.getElementById('dashboardId').value;
+            const teamName = document.getElementById('customerSelect').value;
+
+            try {
+                const response = await fetch(`/grafana/dashboard/${dashboardId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: teamName,
+                        email: `${teamName.toLowerCase().replace(' ', '')}@example.com`
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('grafana-frame').src = data.url;
+                } else {
+                    alert('Error: ' + data.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

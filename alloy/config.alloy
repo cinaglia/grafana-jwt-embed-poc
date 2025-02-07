@@ -1,0 +1,21 @@
+prometheus.remote_write "default" {
+  endpoint {
+    url =  env("GRAFANA_CLOUD_OTLP_ENDPOINT")
+
+    // Get basic authentication based on environment variables.
+    basic_auth {
+      username = env("GRAFANA_CLOUD_INSTANCE_ID")
+      password = env("GRAFANA_CLOUD_TOKEN")
+    }
+  }
+}
+
+prometheus.scrape "example" {
+  targets = [{
+    __address__ = "host.docker.internal:8080",
+  }]
+
+  forward_to = [prometheus.remote_write.default.receiver]
+  scrape_interval = "60s"
+  job_name = "embed-poc"
+}
