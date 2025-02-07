@@ -314,11 +314,12 @@ async def handle_grafana_dashboard(dashboard_id: str, team_data: GrafanaTeam):
             # Generate JWT token with user info and team name
             auth_token = generate_grafana_jwt(username, user_email, team_data.name, user_id)
             
+            base_url = GRAFANA_CONFIG["base_url"].rstrip('/')
             return {
                 "message": f"Processing dashboard ID: {dashboard_id}",
                 "team_id": team_id,
                 "team_uid": team_uid,
-                "url": f"https://embedpoc.grafana.net/d/{dashboard_id}?orgId=1&kiosk&auth_token={auth_token}"
+                "url": f"{base_url}/d/{dashboard_id}?orgId=1&kiosk&auth_token={auth_token}"
             }
         except httpx.HTTPError as e:
             logger.error(f"Grafana API error: {str(e)}\nResponse content: {e.response.content if hasattr(e, 'response') else 'No response'}")
