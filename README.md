@@ -18,10 +18,10 @@ This project demonstrates embedding Grafana dashboards with team-based access co
 
 - Python 3.9+
 - A Grafana Cloud instance with:
-  - Enterprise features enabled
+  - Enterprise license
   - Grafana Service Account token with admin privileges
-  - Prometheus datasource configured
-  - Dashboard configured with a panel based on the `cpu_utilization` metric (make note of the dashboard ID).
+  - Prometheus datasource configured (make note of the datasource ID)
+  - Dashboard configured with a panel based on the `cpu_utilization` metric (make note of the dashboard ID)
 
 ### Grafana Configuration Requirements
 
@@ -29,7 +29,7 @@ You'll want to contact support to have these enabled for you.
 
 ```ini
 [feature_toggles]
-teamHttpHeadersMimir = true
+teamHttpHeadersMimir = true ; enterprise feature
 
 [auth.jwt]
 auto_sign_up = true
@@ -57,11 +57,12 @@ pip install -r requirements.txt
 ```
 
 2. Set up environment variables in `.env`:
-```
+```bash
 # Grafana instance configuration
 GRAFANA_BASE_URL=https://your-instance.grafana.net
 GRAFANA_TOKEN=your-api-token
 GRAFANA_DATASOURCE_ID=your-datasource-uid
+GRAFANA_DASHBOARD_ID=your-dashboard-uid
 
 # Grafana Cloud metrics configuration
 GRAFANA_CLOUD_OTLP_ENDPOINT=https://prometheus-X.grafana.net/api/prom/push
@@ -79,7 +80,7 @@ docker-compose up -d
 python main.py
 ```
 
-5. Visit http://localhost:8080 to test the dashboard embedding
+5. Visit http://localhost:8080 to test the dashboard embedding.
 
 ## Usage
 
