@@ -8,8 +8,8 @@
     <div class="fixed top-4 left-4 z-50 flex items-center gap-3">
         <input type="hidden" id="dashboardId" value="{{ dashboard_id }}">
         <select id="customerSelect" class="px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <option value="Customer 123">John @ Customer 123</option>
-            <option value="Customer 456">Peter @ Customer 456</option>
+            <option value="1">John @ Customer 123</option>
+            <option value="2">Peter @ Customer 456</option>
         </select>
         <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
             Load
@@ -20,7 +20,7 @@
     <script>
         async function loadDashboard() {
             const dashboardId = document.getElementById('dashboardId').value;
-            const teamName = document.getElementById('customerSelect').value;
+            const user_id = document.getElementById('customerSelect').value;
 
             try {
                 const response = await fetch(`/grafana/dashboard/${dashboardId}`, {
@@ -29,8 +29,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        name: teamName,
-                        email: `${teamName.toLowerCase().replace(' ', '')}@example.com`
+                        user_id: user_id
                     })
                 });
 

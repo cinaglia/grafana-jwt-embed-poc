@@ -50,12 +50,8 @@ class GrafanaTeam(BaseModel):
     name: str
     email: str
 
-class TeamSyncRequest(BaseModel):
-    auto_sync: bool
-
-class DataSourcePermission(BaseModel):
-    permission: int
-    team_id: int
+class DashboardRequest(BaseModel):
+    user_id: int
 
 # Setup templates
 BASE_DIR = Path(__file__).resolve().parent
@@ -287,20 +283,19 @@ async def serve_html(request: Request):
     })
 
 @app.post("/grafana/dashboard/{dashboard_id}")
-async def handle_grafana_dashboard(dashboard_id: str, team_data: GrafanaTeam):
+async def handle_grafana_dashboard(dashboard_id: str, request: DashboardRequest):
     async with httpx.AsyncClient() as client:
         try:
-            # Hardcoded user info for now, this should come from the user session.
-            if team_data.name == "Customer 123":
-                user_id = 1
+            if request.user_id == 1:
                 username = "john"
                 user_email = "john@customer123.com"
-            elif team_data.name == "Customer 456":
-                user_id = 2
+                team_data = GrafanaTeam(name="Customer 123", email="team@customer123.com")
+            elif request.user_id == 2:
                 username = "peter"
                 user_email = "peter@customer456.com"
+                team_data = GrafanaTeam(name="Customer 456", email="team@customer456.com")
             else:
-                raise HTTPException(status_code=400, detail="Invalid team name")
+                raise HTTPException(status_code=400, detail="Invalid user ID")
 
             # Step 1: Upsert team
             team_id, team_uid = await upsert_team(client, team_data)
@@ -321,7 +316,7 @@ async def handle_grafana_dashboard(dashboard_id: str, team_data: GrafanaTeam):
             await update_lbac_rules(client, team_uid, team_data.name)
             
             # Generate JWT token with user info and team name
-            auth_token = generate_grafana_jwt(username, user_email, team_data.name, user_id)
+            auth_token = generate_grafana_jwt(username, user_email, team_data.name, request.user_id)
             
             base_url = GRAFANA_CONFIG["base_url"].rstrip('/')
             return {
