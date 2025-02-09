@@ -257,8 +257,6 @@ def generate_grafana_jwt(username: str, email: str, team_name: str, user_id: int
         "exp": now + 3600,  # Expires in 1 hour
         "aud": "grafana",  # Audience
         "kid": "embed-key-1",  # Key ID matching the one in JWKS
-        "email": email,
-        "username": username,
         "user": {
             "id": user_id,
             "username": username,
