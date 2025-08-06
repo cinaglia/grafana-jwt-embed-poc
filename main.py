@@ -1,18 +1,18 @@
-from fastapi import FastAPI, HTTPException, Request, Response
+import math
+from fastapi import FastAPI, HTTPException, Request, Depends, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import httpx
 from typing import Optional
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import logging
 from jose import jwt
 import time
 import json
-import math
-from time import time
 import os
+import uvicorn
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,6 +22,12 @@ app = FastAPI()
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Authentication Configuration
+AUTH_CONFIG = {
+    "jwks_auth_mode": os.getenv("JWKS_AUTH_MODE", "none"),  # "none", "bearer"
+    "jwks_bearer_token": os.getenv("JWKS_BEARER_TOKEN", "secret-token-for-jwks"),
+}
 
 # Configuration
 GRAFANA_CONFIG = {
@@ -57,9 +63,61 @@ class DashboardRequest(BaseModel):
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
-# Add this near the top with other imports and config
+# Setup JWT authentication
+security = HTTPBearer(auto_error=False)
+
+# Load JWKS
 with open("keys/jwks.json") as f:
     JWKS = json.load(f)
+
+def verify_bearer_token(credentials: Optional[HTTPAuthorizationCredentials]) -> bool:
+    """Verify bearer token matches the expected value."""
+    if not credentials:
+        logger.warning("Bearer token required but not present")
+        return False
+
+    if credentials.credentials != AUTH_CONFIG["jwks_bearer_token"]:
+        logger.warning("Invalid bearer token provided")
+        return False
+
+    return True
+
+def jwks_auth_dependency(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> bool:
+    """Authentication dependency for JWKS endpoint."""
+    auth_mode = AUTH_CONFIG["jwks_auth_mode"]
+
+    # Log the request
+    logger.info(f"JWKS request from {request.client} with auth mode: {auth_mode}")
+
+    if auth_mode == "none":
+        return True
+
+    if auth_mode == "bearer":
+        if verify_bearer_token(credentials):
+            logger.info("Bearer token authenticated")
+            return True
+        else:
+            logger.info("Bearer token authentication failed")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or missing bearer token",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Invalid authentication mode: {auth_mode}"
+        )
+
+@app.get("/.well-known/jwks.json")
+async def serve_jwks(authenticated: bool = Depends(jwks_auth_dependency)):
+    """
+    Serve the JWKS (JSON Web Key Set) for JWT verification.
+    """
+    return JWKS
 
 async def create_grafana_request(method: str, path: str, json_data: dict = None) -> httpx.Request:
     headers = {
@@ -76,7 +134,7 @@ async def upsert_team(client: httpx.AsyncClient, team_data: GrafanaTeam) -> tupl
     """
     # First, search for the team by name
     search_req = await create_grafana_request(
-        "GET", 
+        "GET",
         f"/api/teams/search?query={team_data.name}"
     )
     search_resp = await client.send(search_req)
@@ -91,8 +149,8 @@ async def upsert_team(client: httpx.AsyncClient, team_data: GrafanaTeam) -> tupl
 
     # If team doesn't exist, create it
     create_req = await create_grafana_request(
-        "POST", 
-        "/api/teams", 
+        "POST",
+        "/api/teams",
         team_data.dict(exclude={"id", "uid"})
     )
     create_resp = await client.send(create_req)
@@ -115,7 +173,7 @@ async def upsert_team_group(client: httpx.AsyncClient, team_id: int, group_name:
 
     # Check if group already exists
     group_exists = any(group["groupId"] == group_name for group in existing_groups)
-    
+
     if not group_exists:
         # Add the new group
         add_group_req = await create_grafana_request(
@@ -153,7 +211,7 @@ async def update_lbac_rules(client: httpx.AsyncClient, team_uid: str, team_name:
     )
     get_rules_resp = await client.send(get_rules_req)
     get_rules_resp.raise_for_status()
-    
+
     existing_rules = get_rules_resp.json().get("rules", []) or []
     rule = {
         "teamUid": team_uid,
@@ -161,7 +219,7 @@ async def update_lbac_rules(client: httpx.AsyncClient, team_uid: str, team_name:
             f'''{{team_id="{team_name}"}}'''
         ]
     }
-      
+
     # Update LBAC rules for the datasource, if applicable.
     if rule not in existing_rules:
         lbac_req = await create_grafana_request(
@@ -179,7 +237,7 @@ async def upsert_dashboard_role(client: httpx.AsyncClient, dashboard_id: str) ->
     """
     # Create role UID from dashboard ID
     role_uid = f"custom_dashboard_read_{dashboard_id}"
-    
+
     role_data = {
         "version": 1,
         "uid": role_uid,
@@ -207,7 +265,7 @@ async def upsert_dashboard_role(client: httpx.AsyncClient, dashboard_id: str) ->
         f"/api/access-control/roles/{role_uid}"
     )
     get_role_resp = await client.send(get_role_req)
-    
+
     # If role exists, update it with PUT
     if get_role_resp.status_code == 200:
         resp = get_role_resp.json()
@@ -218,7 +276,7 @@ async def upsert_dashboard_role(client: httpx.AsyncClient, dashboard_id: str) ->
                 f"/api/access-control/roles/{role_uid}",
                 role_data
             )
-    
+
     # If role doesn't exist, create it with POST
     else:
         role_req = await create_grafana_request(
@@ -226,10 +284,10 @@ async def upsert_dashboard_role(client: httpx.AsyncClient, dashboard_id: str) ->
             "/api/access-control/roles",
             role_data
         )
-    
+
     role_resp = await client.send(role_req)
     role_resp.raise_for_status()
-    
+
     return role_uid
 
 async def assign_role_to_team(client: httpx.AsyncClient, team_id: int, role_uid: str) -> None:
@@ -249,7 +307,7 @@ async def assign_role_to_team(client: httpx.AsyncClient, team_id: int, role_uid:
 
 def generate_grafana_jwt(username: str, email: str, team_name: str, user_id: int) -> str:
     """Generate a JWT token for Grafana authentication"""
-    now = int(time())
+    now = int(time.time())
     claims = {
         "sub": str(user_id),  # Subject (user id as string)
         "iss": "embed-app",  # Issuer
@@ -265,7 +323,7 @@ def generate_grafana_jwt(username: str, email: str, team_name: str, user_id: int
             "role": "None",
         }
     }
-    
+
     return jwt.encode(
         claims=claims,
         key=GRAFANA_CONFIG["private_key"],
@@ -336,33 +394,66 @@ async def metrics():
     Return Prometheus-formatted metrics with simulated CPU utilization.
     """
     # Calculate oscillating values between 0.5 and 1.0 using sine wave
-    t = time()
+    t = time.time()
     base_value = 0.75  # Center point between 0.5 and 1.0
     amplitude = 0.25   # Distance from center to peak/trough
-    
+
     # Create two different phases for different customers
     value1 = base_value + amplitude * math.sin(t)
     value2 = base_value + amplitude * math.sin(t + math.pi)  # Offset by π to get opposite phase
-    
+
     # Format in Prometheus text format
     metrics_text = """# HELP cpu_utilization CPU utilization percentage
 # TYPE cpu_utilization gauge
 cpu_utilization{team_id="Customer 123"} %.3f
 cpu_utilization{team_id="Customer 456"} %.3f
 """ % (value1, value2)
-    
+
     return Response(
         content=metrics_text,
         media_type="text/plain"
     )
 
-@app.get("/.well-known/jwks.json")
-async def serve_jwks():
-    """
-    Serve the JWKS (JSON Web Key Set) for JWT verification.
-    """
-    return JWKS
-
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    import threading
+
+    serve_jwks_via_https = os.getenv("SERVE_JWKS_VIA_HTTPS", "false").lower() == "true"
+
+    def run_http_server():
+        """Run the main HTTP server with all endpoints"""
+        print("Starting HTTP server on http://localhost:8080")
+        uvicorn.run(app, host="0.0.0.0", port=8080, access_log=True)
+
+    def run_https_jwks_server():
+        """Run HTTPS server serving only the JWKS endpoint"""
+        from fastapi import FastAPI
+
+        # Create a minimal FastAPI app just for JWKS
+        jwks_app = FastAPI(title="JWKS HTTPS Server")
+
+        @jwks_app.get("/.well-known/jwks.json")
+        async def serve_jwks_https(authenticated: bool = Depends(jwks_auth_dependency)):
+            """HTTPS-only JWKS endpoint for testing tls_client_ca"""
+            return JWKS
+
+        print("Starting HTTPS JWKS server on https://localhost:8443")
+        uvicorn.run(
+            jwks_app,
+            host="0.0.0.0",
+            port=8443,
+            ssl_certfile="keys/ssl/server-cert.pem",
+            ssl_keyfile="keys/ssl/server-key.pem",
+            access_log=True
+        )
+
+    if serve_jwks_via_https:
+        print("Starting dual-mode servers (HTTP + HTTPS JWKS)")
+        print("=" * 60)
+        http_thread = threading.Thread(target=run_http_server, daemon=True)
+        http_thread.start()
+        time.sleep(1)
+        run_https_jwks_server()
+
+    else:
+        print("Starting in HTTP-only mode")
+        run_http_server()
