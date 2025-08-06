@@ -1,7 +1,9 @@
 fastapi
 uvicorn
+hypercorn
 httpx
 python-jose[cryptography]
 jinja2
 python-multipart
 python-dotenv
+cryptography
